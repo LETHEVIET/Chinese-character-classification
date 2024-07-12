@@ -10,7 +10,18 @@
 
 import torch
 import torch.nn as nn
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,  # Set the root logger level (DEBUG logs everything)
+    # format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+    handlers=[
+        # logging.FileHandler("my_app.log"),  # Log to a file
+        logging.StreamHandler()             # Log to console 
+    ]
+)
+
+log = logging.getLogger(__name__)
 
 class Fire(nn.Module):
 
@@ -51,8 +62,9 @@ class SqueezeNet(nn.Module):
     def __init__(self, class_num=100):
 
         super().__init__()
+        log.info(class_num)
         self.stem = nn.Sequential(
-            nn.Conv2d(3, 96, 3, padding=1),
+            nn.Conv2d(1, 96, 3, padding=1),
             nn.BatchNorm2d(96),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2)
@@ -93,5 +105,5 @@ class SqueezeNet(nn.Module):
 
         return x
 
-def squeezenet(class_num=100):
+def squeezenet(class_num=952):
     return SqueezeNet(class_num=class_num)
