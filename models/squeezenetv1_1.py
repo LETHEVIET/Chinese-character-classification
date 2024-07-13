@@ -71,8 +71,8 @@ class SqueezeNet(nn.Module):
         )
 
         self.fire2 = Fire(64, 128, 16)
-        self.fire3 = Fire(128, 256, 16)
-        self.fire4 = Fire(256, 256, 32)
+        self.fire3 = Fire(128, 128, 16)
+        self.fire4 = Fire(128, 256, 32)
         self.fire5 = Fire(256, 256, 32)
         self.fire6 = Fire(256, 384, 48)
         self.fire7 = Fire(384, 384, 48)
