@@ -113,8 +113,10 @@ def calculate_loss(predict, ground_truth):
     target_lengths = torch.Tensor(target_lengths).type(torch.LongTensor)
 
     inputs = inputs.permute(1, 0, 2) #.contiguous()
-    input_lengths = torch.full(size=(N,), fill_value=T, dtype=torch.long)
-    loss = ctc_loss(inputs, target, input_lengths, target_lengths)
+    inputs_lengths = torch.full(size=(N,), fill_value=T, dtype=torch.long)
+    log.info(f"inputs.shape: {inputs.shape}, length shape: {inputs_lengths.shape}")
+    log.info(f"target.shape: {target.shape}, length shape: {target_lengths.shape}")
+    loss = ctc_loss(inputs, target, inputs_lengths, target_lengths)
     log.info(f"loss: {loss.item()}")
     return loss
 

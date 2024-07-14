@@ -79,7 +79,7 @@ class SqueezeNet(nn.Module):
         self.fire8 = Fire(384, 512, 64)
         self.fire9 = Fire(512, 512, 64)
 
-        self.conv10 = nn.Conv2d(512, max_length * class_num, 1)
+        self.conv10 = nn.Conv2d(512, max_length, 1)
         self.avg = nn.AdaptiveAvgPool2d((1, class_num))
         self.maxpool = nn.MaxPool2d(2, 2)
 
