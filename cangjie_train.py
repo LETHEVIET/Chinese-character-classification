@@ -213,7 +213,8 @@ if __name__ == '__main__':
 
     # loss_function = nn.CrossEntropyLoss()
     ctc_loss = nn.CTCLoss(len(cangjie_class.char_list) + 1)
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.Adam(net.parameters(), lr=args.lr)
     train_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=settings.MILESTONES, gamma=0.2) #learning rate decay
     iter_per_epoch = len(cangjie_training_loader)
     warmup_scheduler = WarmUpLR(optimizer, iter_per_epoch * args.warm)
