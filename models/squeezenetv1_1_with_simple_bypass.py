@@ -97,7 +97,7 @@ class SqueezeNet(nn.Module):
         f6 = self.fire6(f5)
         f7 = self.fire7(f6) + f6
         f8 = self.fire8(f7)
-        f9 = self.fire9(f8)
+        f9 = self.fire9(f8) + f8
         c10 = self.conv10(f9)
 
         x = self.avg(c10)

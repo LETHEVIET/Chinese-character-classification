@@ -110,8 +110,11 @@ def get_network(args):
     elif args.net == 'squeezenetv1.1':
         from models.squeezenetv1_1 import squeezenet
         net = squeezenet()
-    elif args.net == 'squeezenetv1.1_with_residual_connection':
-        from models.squeezenetv1_1_with_residual_connection import squeezenet
+    elif args.net == 'squeezenetv1.1_with_simple_bypass':
+        from models.squeezenetv1_1_with_simple_bypass import squeezenet
+        net = squeezenet()
+    elif args.net == 'squeezenetv1.1_with_complex_bypass':
+        from models.squeezenetv1_1_with_complex_bypass import squeezenet
         net = squeezenet()
     elif args.net == 'mobilenet':
         from models.mobilenet import mobilenet
