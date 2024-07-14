@@ -148,7 +148,6 @@ def eval_training(epoch=0, tb=True):
             preds_str = cangjie_class.decode_to_classname(preds[i])
             labels_str = cangjie_class.decode_to_classname(labels[i])
 
-            
             if labels_str != "zc":
                 frac += editdistance.eval(preds_str, labels_str)
                 deno += len(labels_str)

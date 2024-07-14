@@ -61,7 +61,7 @@ class Cangjie_Class():
             try:
                 class_name += self.char_list[int(dig)]
             except:
-                break
+                class_name += '_'
 
         return class_name
     
