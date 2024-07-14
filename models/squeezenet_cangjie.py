@@ -64,13 +64,13 @@ class SqueezeNet(nn.Module):
         super().__init__()
         log.info(class_num)
         self.stem = nn.Sequential(
-            nn.Conv2d(1, 96, 3, padding=1),
-            nn.BatchNorm2d(96),
+            nn.Conv2d(1, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2)
         )
 
-        self.fire2 = Fire(96, 128, 16)
+        self.fire2 = Fire(64, 128, 16)
         self.fire3 = Fire(128, 128, 16)
         self.fire4 = Fire(128, 256, 32)
         self.fire5 = Fire(256, 256, 32)
@@ -79,7 +79,7 @@ class SqueezeNet(nn.Module):
         self.fire8 = Fire(384, 512, 64)
         self.fire9 = Fire(512, 512, 64)
 
-        self.conv10 = nn.Conv2d(512, max_length, 1)
+        self.conv10 = nn.Conv2d(512, max_length * class_num, 1)
         self.avg = nn.AdaptiveAvgPool2d((1, class_num))
         self.maxpool = nn.MaxPool2d(2, 2)
 
@@ -91,16 +91,16 @@ class SqueezeNet(nn.Module):
 
         f2 = self.fire2(x)
         f3 = self.fire3(f2) + f2
+        f3 = self.maxpool(f3)
+        
         f4 = self.fire4(f3)
-        f4 = self.maxpool(f4)
-
         f5 = self.fire5(f4) + f4
+        f5 = self.maxpool(f5)
+
         f6 = self.fire6(f5)
         f7 = self.fire7(f6) + f6
         f8 = self.fire8(f7)
-        f8 = self.maxpool(f8)
-
-        f9 = self.fire9(f8)
+        f9 = self.fire9(f8) + f8
         c10 = self.conv10(f9)
 
         x = self.avg(c10)
