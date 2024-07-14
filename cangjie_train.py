@@ -148,10 +148,13 @@ def eval_training(epoch=0, tb=True):
             preds_str = cangjie_class.decode_to_classname(preds[i])
             labels_str = cangjie_class.decode_to_classname(labels[i])
 
-            frac += editdistance.eval(preds_str, labels_str)
+            
             if labels_str != "zc":
+                frac += editdistance.eval(preds_str, labels_str)
                 deno += len(labels_str)
             else:
+                if labels_str != preds_str:
+                    frac += 1
                 deno += 1
 
     levenshtein_accuracy = 1 - float(frac) / deno
