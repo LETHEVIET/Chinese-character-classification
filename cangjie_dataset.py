@@ -57,7 +57,7 @@ class Cangjie_Class():
     def decode_to_classname(self, dig_lst):
         class_name = ''
 
-        for dig in  dig_lst:
+        for dig in dig_lst[:5]:
             try:
                 class_name += self.char_list[int(dig)]
             except:
