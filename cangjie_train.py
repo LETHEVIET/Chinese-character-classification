@@ -68,7 +68,7 @@ def train(epoch):
             # print(labels[:, i].shape)
             total_loss += loss_function(output, labels[:, i])
 
-        total_loss /= len(outputs) 
+        # total_loss /= len(outputs) 
         total_loss.backward()
 
         optimizer.step()
