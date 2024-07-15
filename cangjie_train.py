@@ -192,7 +192,7 @@ if __name__ == '__main__':
     cangjie_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt")
 
     log.info("Loading training data... ")
-    cangjie_training_loader = get_cangjie_training_dataloader(
+    cangjie_training_loader = get_cangjie_test_dataloader(
         num_workers=4,
         batch_size=args.b,
         shuffle=True

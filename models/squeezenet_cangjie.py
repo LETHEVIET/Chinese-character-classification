@@ -86,6 +86,8 @@ class SqueezeNet(nn.Module):
         self.heads = [nn.AdaptiveAvgPool2d(1) for _ in range(max_length)]
         self.maxpool = nn.MaxPool2d(2, 2)
 
+        self.softmax = nn.Softmax(dim=1)
+
         self.max_length = max_length
         self.class_num = class_num
 
@@ -119,6 +121,7 @@ class SqueezeNet(nn.Module):
         for head in self.heads:
             x = head(c10)
             x = x.view(x.size(0), -1)
+            x = self.softmax(x)
             outputs.append(x)
 
         return outputs
