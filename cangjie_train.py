@@ -114,6 +114,9 @@ def eval_training(epoch=0, tb=True):
     test_loss = 0.0 # cost function error
     correct = 0.0
 
+    frac = 0.0
+    deno = 0.0
+
     for (images, cls, labels) in cangjie_val_loader:
 
         if args.gpu:
@@ -143,18 +146,24 @@ def eval_training(epoch=0, tb=True):
         for i, predict in enumerate(predictions):
             predict_text = cangjie_class.decode(predict.tolist())
             labels_text = cangjie_class.decode(labels[i].tolist())
+            frac += editdistance.eval(predict_text.replace('_', ''), labels_text.replace('_', ''))
+            if labels_text == 'zc___':
+                deno += 1
+            else:
+                deno += len(labels_text.replace('_', ''))
             correct += 1 if predict_text == labels_text else 0
 
-        
+    levenshtein_accuracy = 1 - float(frac) / deno 
     finish = time.time()
     if args.gpu:
         print('GPU INFO.....')
         print(torch.cuda.memory_summary(), end='')
     print('Evaluating Network.....')
-    print('Test set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
+    print('Test set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Lev Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
         epoch,
         test_loss / len(cangjie_val_loader.dataset),
         correct / len(cangjie_val_loader.dataset),
+        levenshtein_accuracy,
         finish - start
     ))
     print()
@@ -163,6 +172,7 @@ def eval_training(epoch=0, tb=True):
     if tb:
         writer.add_scalar('Test/Average loss', test_loss / len(cangjie_val_loader.dataset), epoch)
         writer.add_scalar('Test/Accuracy', correct / len(cangjie_val_loader.dataset), epoch)
+        writer.add_scalar('Test/Lev Accuracy', levenshtein_accuracy)
 
     return correct / len(cangjie_val_loader.dataset)
 
@@ -182,7 +192,7 @@ if __name__ == '__main__':
     cangjie_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt")
 
     log.info("Loading training data... ")
-    cangjie_training_loader = get_cangjie_test_dataloader(
+    cangjie_training_loader = get_cangjie_training_dataloader(
         num_workers=4,
         batch_size=args.b,
         shuffle=True
