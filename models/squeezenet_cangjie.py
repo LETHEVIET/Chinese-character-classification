@@ -79,8 +79,11 @@ class SqueezeNet(nn.Module):
         self.fire8 = Fire(384, 512, 64)
         self.fire9 = Fire(512, 512, 64)
 
-        self.conv10 = nn.Conv2d(512, max_length, 1)
-        self.avg = nn.AdaptiveAvgPool2d((1, class_num))
+        self.conv10 = nn.Conv2d(512, class_num, 1)
+
+        # self.heads = [nn.AdaptiveAvgPool2d(1) for _ in range(max_length)]
+        # self.avg = nn.AdaptiveAvgPool2d(1)
+        self.heads = [nn.AdaptiveAvgPool2d(1) for _ in range(max_length)]
         self.maxpool = nn.MaxPool2d(2, 2)
 
         self.max_length = max_length
@@ -103,10 +106,22 @@ class SqueezeNet(nn.Module):
         f9 = self.fire9(f8) + f8
         c10 = self.conv10(f9)
 
-        x = self.avg(c10)
-        x = x.view(-1, self.max_length, self.class_num)
+        # x = self.avg(c10)
+        # outputs = []
+        # for head, feature in zip(self.heads, c10):
+        #     x = head(feature)
+        #     x = x.view(x.size(0), -1)
+        #     outputs.append(x)
 
-        return x
+        # return outputs
+
+        outputs = []
+        for head in self.heads:
+            x = head(c10)
+            x = x.view(x.size(0), -1)
+            outputs.append(x)
+
+        return outputs
 
 def squeezenet(class_num=952):
-    return SqueezeNet(class_num=28, max_length=7)
+    return SqueezeNet(class_num=27, max_length=5)

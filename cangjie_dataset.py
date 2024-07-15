@@ -10,8 +10,8 @@ import numpy
 import string
 
 class Cangjie_Class():
-    CHARS = 'abcdefghijklmnopqrstuvwxyz'
-    CHAR2LABEL = {char: i + 1 for i, char in enumerate(CHARS)}
+    CHARS = 'abcdefghijklmnopqrstuvwxyz_'
+    CHAR2LABEL = {char: i for i, char in enumerate(CHARS)}
     LABEL2CHAR = {label: char for char, label in CHAR2LABEL.items()}
 
     def __init__(self, file_path):
@@ -41,31 +41,9 @@ class Cangjie_Class():
         self.class_df["cls"] = self.class_df.apply(lambda row: 0 if row["label"] == "zc" else 1, axis=1)
 
     def get_class_name_from_path(self, image_path):
-        return self.class_df.iloc[int(image_path.parent.stem)]["label"]
-    
-    def encode_to_labels(self, txt):
-        dig_lst = []
-        for index, char in enumerate(txt):
-            try:
-                dig_lst.append(self.char_list.index(char))
-            except:
-                print(char)
-
-        while len(dig_lst) < 7:
-            dig_lst.append(len(self.char_list))
-            
-        return dig_lst
-    
-    def decode_to_classname(self, dig_lst):
-        class_name = ''
-
-        for dig in dig_lst[:5]:
-            try:
-                class_name += self.char_list[int(dig)]
-            except:
-                class_name += '_'
-
-        return class_name
+        label = self.class_df.iloc[int(image_path.parent.stem)]["label"]
+        label += '_' * (5 - len(label))
+        return label
     
     def get_classes(self):
         classes = list(self.class_df["label"])
@@ -79,7 +57,7 @@ class Cangjie_Dataset(Dataset):
         self.cangjie = Cangjie_Class(pathlib.Path(targ_dir) / "952_labels.txt")
         self.paths = list((pathlib.Path(targ_dir)/ f"952_{set}").glob("*/*.png"))
         self.transform = transform
-        self.classes, self.class_to_idx, self.idx_to_class = self.cangjie.get_classes()
+        # self.classes, self.class_to_idx, self.idx_to_class = self.cangjie.get_classes()
 
     def load_image(self, index: int) -> Image.Image:
         "Opens an image via a path and returns it."
@@ -99,11 +77,10 @@ class Cangjie_Dataset(Dataset):
 
         text = self.cangjie.get_class_name_from_path(self.paths[index])
         target = [self.cangjie.CHAR2LABEL[c] for c in text]
-        target_length = [len(target)]
-
+        cls = torch.Tensor([0]) if text == 'zc___' else torch.Tensor([1])
         target = torch.LongTensor(target)
-        target_length = torch.LongTensor(target_length)
-        return image, target, target_length
+
+        return image, cls, target
         
 def cangjie_collate_fn(batch):
     images, targets, target_lengths = zip(*batch)
@@ -132,8 +109,7 @@ def get_cangjie_training_dataloader(batch_size=16, num_workers=2, shuffle=True):
     cangjie_training_loader = DataLoader(cangjie_train,
                                          shuffle=shuffle, 
                                          num_workers=num_workers, 
-                                         batch_size=batch_size,
-                                         collate_fn=cangjie_collate_fn)
+                                         batch_size=batch_size)
 
     return cangjie_training_loader
 
@@ -158,8 +134,7 @@ def get_cangjie_val_dataloader(batch_size=16, num_workers=2, shuffle=True):
     cangjie_val_loader = DataLoader(cangjie_val, 
                                     shuffle=shuffle, 
                                     num_workers=num_workers, 
-                                    batch_size=batch_size,
-                                    collate_fn=cangjie_collate_fn)
+                                    batch_size=batch_size)
 
     return cangjie_val_loader
 
@@ -184,8 +159,7 @@ def get_cangjie_test_dataloader(batch_size=16, num_workers=2, shuffle=True):
     cangjie_test_loader = DataLoader(cangjie_test,
                                      shuffle=shuffle, 
                                      num_workers=num_workers, 
-                                     batch_size=batch_size,
-                                     collate_fn=cangjie_collate_fn)
+                                     batch_size=batch_size)
 
     return cangjie_test_loader
 

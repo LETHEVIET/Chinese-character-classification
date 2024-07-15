@@ -26,8 +26,6 @@ from conf import settings
 from utils import get_network, get_training_dataloader, get_test_dataloader, WarmUpLR, \
     most_recent_folder, most_recent_weights, last_epoch, best_acc_weights
 
-from ctc_decoder import ctc_decode
-
 from cangjie_dataset import get_cangjie_val_dataloader, get_cangjie_training_dataloader, Cangjie_Class
 
 import logging
@@ -46,31 +44,33 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 log.info("Hello, world")
 
-def train(epoch, criterion):
+def train(epoch):
+
     start = time.time()
     net.train()
-    for batch_index, data in enumerate(cangjie_training_loader):
+    for batch_index, (images, cls, labels) in enumerate(cangjie_training_loader):
 
         if args.gpu:
-            images, targets, target_lengths = [d.cuda() for d in data]
-        else:
-            images, targets, target_lengths = [d for d in data]
+            labels = labels.cuda()
+            cls = cls.cuda()
+            images = images.cuda()
 
         optimizer.zero_grad()
-        logits = net(images)
+        outputs = net(images)
 
-        logits = logits.permute(1, 0, 2)
-        log_probs = torch.nn.functional.log_softmax(logits, dim=2)
+        total_loss = 0
 
-        batch_size = images.size(0)
-        input_lengths = torch.LongTensor([logits.size(0)] * batch_size)
-        target_lengths = torch.flatten(target_lengths)
+        # print(labels.shape)
+        # print(outputs.shape)
 
-        loss = criterion(log_probs, targets, input_lengths, target_lengths)
+        for i, output in enumerate(outputs):
+            # print(output.shape)
+            # print(labels[:, i].shape)
+            total_loss += loss_function(output, labels[:, i])
 
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), 5) # gradient clipping with 5
+        total_loss /= len(outputs) 
+        total_loss.backward()
+
         optimizer.step()
 
         n_iter = (epoch - 1) * len(cangjie_training_loader) + batch_index + 1
@@ -83,7 +83,7 @@ def train(epoch, criterion):
                 writer.add_scalar('LastLayerGradients/grad_norm2_bias', para.grad.norm(), n_iter)
 
         print('Training Epoch: {epoch} [{trained_samples}/{total_samples}]\tLoss: {:0.4f}\tLR: {:0.6f}'.format(
-            loss.item(),
+            total_loss.item(),
             optimizer.param_groups[0]['lr'],
             epoch=epoch,
             trained_samples=batch_index * args.b + len(images),
@@ -91,7 +91,7 @@ def train(epoch, criterion):
         ))
 
         #update training loss for each iteration
-        writer.add_scalar('Train/loss', loss.item(), n_iter)
+        writer.add_scalar('Train/loss', total_loss.item(), n_iter)
 
         if epoch <= args.warm:
             warmup_scheduler.step()
@@ -105,94 +105,58 @@ def train(epoch, criterion):
 
     print('epoch {} training time consumed: {:.2f}s'.format(epoch, finish - start))
 
-def calculate_loss(predict, ground_truth):
-    T = ground_truth.shape[1]
-    N = ground_truth.shape[0]
-
-    target = ground_truth.type(torch.LongTensor)
-    inputs = predict.log_softmax(2)
-
-    target_lengths = []
-
-    for img in ground_truth.tolist():
-        i = 0
-        while i < 5 and img[i] < 26.0:
-            i += 1
-        target_lengths.append(i)
-    target_lengths = torch.Tensor(target_lengths).type(torch.LongTensor)
-
-    inputs = inputs.permute(1, 0, 2) #.contiguous()
-    inputs_lengths = torch.full(size=(N,), fill_value=T, dtype=torch.long)
-    log.info(f"inputs.shape: {inputs.shape}, length shape: {inputs_lengths.shape}")
-    log.info(f"target.shape: {target.shape}, length shape: {target_lengths.shape}")
-    loss = ctc_loss(inputs, target, inputs_lengths, target_lengths)
-    log.info(f"loss: {loss.item()}")
-    return loss
-
 @torch.no_grad()
-def eval_training(criterion, epoch=0, decode_method='beam_search', beam_size=10, tb=True):
-
-    tot_count = 0
-    tot_loss = 0
-    tot_correct = 0
-    wrong_cases = []
+def eval_training(epoch=0, tb=True):
 
     start = time.time()
     net.eval()
 
-    for i, data in enumerate(cangjie_val_loader):
-        device = 'cuda' if next(net.parameters()).is_cuda else 'cpu'
+    test_loss = 0.0 # cost function error
+    correct = 0.0
 
-        images, targets, target_lengths = [d.to(device) for d in data]
+    for (images, cls, labels) in cangjie_val_loader:
 
-        logits = net(images)
-        logits = logits.permute(1, 0, 2)
-        log_probs = torch.nn.functional.log_softmax(logits, dim=2)
+        if args.gpu:
+            labels = labels.cuda()
+            cls = cls.cuda()
+            images = images.cuda()
 
-        batch_size = images.size(0)
-        input_lengths = torch.LongTensor([logits.size(0)] * batch_size)
-        target_lengths = torch.flatten(target_lengths)
+        outputs = net(images)
+        total_loss = 0.0
+        for i, output in enumerate(outputs):
+            total_loss += loss_function(output, labels[:, i])
 
-        loss = criterion(log_probs, targets, input_lengths, target_lengths)
+        total_loss /= len(outputs) 
 
-        preds = ctc_decode(log_probs, method=decode_method, beam_size=beam_size)
-        reals = targets.cpu().numpy().tolist()
-        target_lengths = target_lengths.cpu().numpy().tolist()
+        test_loss += total_loss.item()
 
-        tot_count += batch_size
-        tot_loss += loss.item()
-        target_length_counter = 0
-        for pred, target_length in zip(preds, target_lengths):
-            real = reals[target_length_counter:target_length_counter + target_length]
-            target_length_counter += target_length
-            if pred == real:
-                tot_correct += 1
-            else:
-                wrong_cases.append((real, pred))
-
-    with open("val.log", "w") as f:
-        for case in wrong_cases:
-            f.write(f"{case}\n")
-
+        predictions = []
+        for i, output in enumerate(outputs):
+            _, preds = output.max(1)
+            predictions.append(preds)
+            correct += preds.eq(labels).sum()
+        predictions = torch.Tensor(predictions).type(torch.LongTensor)
+        print(predictions.shape)
+        
     finish = time.time()
     if args.gpu:
         print('GPU INFO.....')
         print(torch.cuda.memory_summary(), end='')
     print('Evaluating Network.....')
-    print('Validation set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
+    print('Test set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
         epoch,
-        tot_loss / tot_count,
-        tot_correct / tot_count,
+        test_loss / len(cangjie_val_loader.dataset),
+        correct.float() / len(cangjie_val_loader.dataset),
         finish - start
     ))
     print()
 
     #add informations to tensorboard
     if tb:
-        writer.add_scalar('Validation/Average loss', tot_loss / tot_count, epoch)
-        writer.add_scalar('Validation/Lev Accuracy', tot_correct / tot_count, epoch)
+        writer.add_scalar('Test/Average loss', test_loss / len(cangjie_val_loader.dataset), epoch)
+        writer.add_scalar('Test/Accuracy', correct.float() / len(cangjie_val_loader.dataset), epoch)
 
-    return tot_correct / tot_count
+    return correct.float() / len(cangjie_val_loader.dataset)
 
 if __name__ == '__main__':
 
@@ -207,7 +171,7 @@ if __name__ == '__main__':
 
     net = get_network(args)
 
-    cangjie_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt")
+    classes, class_to_idx, idx_to_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt").get_classes()
 
     log.info("Loading training data... ")
     cangjie_training_loader = get_cangjie_training_dataloader(
@@ -217,18 +181,16 @@ if __name__ == '__main__':
     )
     log.info("Training data loaded!")
 
-    log.info("Loading validation data... ")
+    log.info("Loading Validation data... ")
     cangjie_val_loader = get_cangjie_val_dataloader(
         num_workers=4,
         batch_size=args.b,
         shuffle=True
     )
-    log.info("Validation dataset loaded!")
+    log.info("Validation data loaded!")
 
-    # loss_function = nn.CrossEntropyLoss()
-    ctc_loss = nn.CTCLoss(reduction='sum', zero_infinity=True)
-    # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-    optimizer = optim.Adam(net.parameters(), lr=args.lr)
+    loss_function = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     train_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=settings.MILESTONES, gamma=0.2) #learning rate decay
     iter_per_epoch = len(cangjie_training_loader)
     warmup_scheduler = WarmUpLR(optimizer, iter_per_epoch * args.warm)
@@ -269,7 +231,7 @@ if __name__ == '__main__':
             print('found best acc weights file:{}'.format(weights_path))
             print('load best training file to test acc...')
             net.load_state_dict(torch.load(weights_path))
-            best_acc = eval_training(ctc_loss, tb=False) #(tb=False)
+            best_acc = eval_training(tb=False)
             print('best acc is {:0.2f}'.format(best_acc))
 
         recent_weights_file = most_recent_weights(os.path.join(settings.CHECKPOINT_PATH, args.net, recent_folder))
@@ -290,8 +252,8 @@ if __name__ == '__main__':
             if epoch <= resume_epoch:
                 continue
 
-        train(epoch, ctc_loss)
-        acc = eval_training(ctc_loss, epoch)
+        train(epoch)
+        acc = eval_training(epoch)
 
         #start to save best performance model after learning rate decay to 0.01
         # if epoch > settings.MILESTONES[1] and best_acc < acc:
