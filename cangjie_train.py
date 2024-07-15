@@ -26,7 +26,7 @@ from conf import settings
 from utils import get_network, get_training_dataloader, get_test_dataloader, WarmUpLR, \
     most_recent_folder, most_recent_weights, last_epoch, best_acc_weights
 
-from cangjie_dataset import get_cangjie_val_dataloader, get_cangjie_training_dataloader, Cangjie_Class
+from cangjie_dataset import get_cangjie_val_dataloader, get_cangjie_training_dataloader, get_cangjie_test_dataloader, Cangjie_Class
 
 import logging
 import editdistance
@@ -133,10 +133,18 @@ def eval_training(epoch=0, tb=True):
         predictions = []
         for i, output in enumerate(outputs):
             _, preds = output.max(1)
-            predictions.append(preds)
-            correct += preds.eq(labels).sum()
+            predictions.append(preds.tolist())
+            # correct += preds.eq(labels).sum()
         predictions = torch.Tensor(predictions).type(torch.LongTensor)
-        print(predictions.shape)
+        predictions = torch.transpose(predictions, 0, 1)
+        if args.gpu:
+            predictions = predictions.cuda()
+
+        for i, predict in enumerate(predictions):
+            predict_text = cangjie_class.decode(predict.tolist())
+            labels_text = cangjie_class.decode(labels[i].tolist())
+            correct += 1 if predict_text == labels_text else 0
+
         
     finish = time.time()
     if args.gpu:
@@ -146,7 +154,7 @@ def eval_training(epoch=0, tb=True):
     print('Test set: Epoch: {}, Average loss: {:.4f}, Accuracy: {:.4f}, Time consumed:{:.2f}s'.format(
         epoch,
         test_loss / len(cangjie_val_loader.dataset),
-        correct.float() / len(cangjie_val_loader.dataset),
+        correct / len(cangjie_val_loader.dataset),
         finish - start
     ))
     print()
@@ -154,9 +162,9 @@ def eval_training(epoch=0, tb=True):
     #add informations to tensorboard
     if tb:
         writer.add_scalar('Test/Average loss', test_loss / len(cangjie_val_loader.dataset), epoch)
-        writer.add_scalar('Test/Accuracy', correct.float() / len(cangjie_val_loader.dataset), epoch)
+        writer.add_scalar('Test/Accuracy', correct / len(cangjie_val_loader.dataset), epoch)
 
-    return correct.float() / len(cangjie_val_loader.dataset)
+    return correct / len(cangjie_val_loader.dataset)
 
 if __name__ == '__main__':
 
@@ -171,10 +179,10 @@ if __name__ == '__main__':
 
     net = get_network(args)
 
-    classes, class_to_idx, idx_to_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt").get_classes()
+    cangjie_class = Cangjie_Class("etl_952_singlechar_size_64/952_labels.txt")
 
     log.info("Loading training data... ")
-    cangjie_training_loader = get_cangjie_training_dataloader(
+    cangjie_training_loader = get_cangjie_test_dataloader(
         num_workers=4,
         batch_size=args.b,
         shuffle=True
@@ -184,7 +192,7 @@ if __name__ == '__main__':
     log.info("Loading Validation data... ")
     cangjie_val_loader = get_cangjie_val_dataloader(
         num_workers=4,
-        batch_size=args.b,
+        batch_size= args.b,
         shuffle=True
     )
     log.info("Validation data loaded!")

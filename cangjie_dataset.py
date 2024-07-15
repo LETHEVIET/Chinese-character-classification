@@ -50,6 +50,13 @@ class Cangjie_Class():
         class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         idx_to_class = {i:cls_name for i, cls_name in enumerate(classes)}
         return classes, class_to_idx, idx_to_class
+
+    def decode(self, digs):
+        text = ''
+        for dig in digs:
+            text += self.LABEL2CHAR[dig]
+
+        return text
     
 class Cangjie_Dataset(Dataset):
     
