@@ -9,11 +9,13 @@ import pandas as pd
 import numpy
 import string
 
-CANGJIE_DATASET_MEAN = 0.20013867
-CANGJIE_DATASET_STD = 0.38466406
-
 class Cangjie_Class():
+    CHARS = 'abcdefghijklmnopqrstuvwxyz'
+    CHAR2LABEL = {char: i + 1 for i, char in enumerate(CHARS)}
+    LABEL2CHAR = {label: char for char, label in CHAR2LABEL.items()}
+
     def __init__(self, file_path):
+
         self.class_df = []
 
         self.char_list = string.ascii_letters[:26]
@@ -49,7 +51,7 @@ class Cangjie_Class():
             except:
                 print(char)
 
-        while len(dig_lst) < 10:
+        while len(dig_lst) < 7:
             dig_lst.append(len(self.char_list))
             
         return dig_lst
@@ -90,15 +92,26 @@ class Cangjie_Dataset(Dataset):
     
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         "Returns one sample of data, data and label (X, y)."
-        img = self.load_image(index)
-        class_name  = self.cangjie.get_class_name_from_path(self.paths[index])
-        class_label = self.cangjie.encode_to_labels(class_name)
-        class_label = torch.Tensor(class_label)
+        image = self.load_image(index)
+
         if self.transform:
-            return self.transform(img), class_label
-        else:
-            return img, class_label
+            image = self.transform(image)
+
+        text = self.cangjie.get_class_name_from_path(self.paths[index])
+        target = [self.cangjie.CHAR2LABEL[c] for c in text]
+        target_length = [len(target)]
+
+        target = torch.LongTensor(target)
+        target_length = torch.LongTensor(target_length)
+        return image, target, target_length
         
+def cangjie_collate_fn(batch):
+    images, targets, target_lengths = zip(*batch)
+    images = torch.stack(images, 0)
+    targets = torch.cat(targets, 0)
+    target_lengths = torch.cat(target_lengths, 0)
+    return images, targets, target_lengths
+
 def get_cangjie_training_dataloader(batch_size=16, num_workers=2, shuffle=True):
     """ return training dataloader
     Args:
@@ -116,8 +129,11 @@ def get_cangjie_training_dataloader(batch_size=16, num_workers=2, shuffle=True):
     ])
     
     cangjie_train = Cangjie_Dataset("etl_952_singlechar_size_64", "train", transform_train)
-    cangjie_training_loader = DataLoader(
-        cangjie_train, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
+    cangjie_training_loader = DataLoader(cangjie_train,
+                                         shuffle=shuffle, 
+                                         num_workers=num_workers, 
+                                         batch_size=batch_size,
+                                         collate_fn=cangjie_collate_fn)
 
     return cangjie_training_loader
 
@@ -139,8 +155,11 @@ def get_cangjie_val_dataloader(batch_size=16, num_workers=2, shuffle=True):
 
     cangjie_val = Cangjie_Dataset("etl_952_singlechar_size_64", "val", transform_val)
     
-    cangjie_val_loader = DataLoader(
-        cangjie_val, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
+    cangjie_val_loader = DataLoader(cangjie_val, 
+                                    shuffle=shuffle, 
+                                    num_workers=num_workers, 
+                                    batch_size=batch_size,
+                                    collate_fn=cangjie_collate_fn)
 
     return cangjie_val_loader
 
@@ -162,8 +181,11 @@ def get_cangjie_test_dataloader(batch_size=16, num_workers=2, shuffle=True):
 
     cangjie_test = Cangjie_Dataset("etl_952_singlechar_size_64", "test", transform_test)
     
-    cangjie_test_loader = DataLoader(
-        cangjie_test, shuffle=shuffle, num_workers=num_workers, batch_size=batch_size)
+    cangjie_test_loader = DataLoader(cangjie_test,
+                                     shuffle=shuffle, 
+                                     num_workers=num_workers, 
+                                     batch_size=batch_size,
+                                     collate_fn=cangjie_collate_fn)
 
     return cangjie_test_loader
 

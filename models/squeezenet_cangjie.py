@@ -109,4 +109,4 @@ class SqueezeNet(nn.Module):
         return x
 
 def squeezenet(class_num=952):
-    return SqueezeNet(class_num=28, max_length=10)
+    return SqueezeNet(class_num=28, max_length=7)
